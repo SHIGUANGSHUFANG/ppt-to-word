@@ -141,10 +141,11 @@ def get_slide_sections(prs):
 # ==========================================
 # 4. 核心调度大脑
 # ==========================================
-def process_single_english_ppt(ppt_path, doc_template, icon_dir):
+def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=None):
     raw_filename = os.path.splitext(os.path.basename(ppt_path))[0]
     safe_filename = clean_filename(raw_filename)
-    output_path = f"{raw_filename}英语讲义.docx"
+    if output_path is None:
+        output_path = f"{raw_filename}英语讲义.docx"
     
     prs = Presentation(ppt_path)
     doc = Document(doc_template)
