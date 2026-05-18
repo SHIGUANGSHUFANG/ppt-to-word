@@ -117,21 +117,17 @@ def extract_title_bold_only(shape):
     return clean_xml_text(" ".join(bold_pieces))
 
 def get_slide_sections(prs):
-    """【黑魔法】强行破解 PPT 底层 XML，提取每个幻灯片所属的“节”名称"""
     slide_sections = {}
     try:
-        # 寻找所有的节节点
         sections = prs.element.xpath('.//*[local-name()="section"]')
         slide_id_to_section = {}
         for section in sections:
             name = section.get('name')
-            # 提取该节下所有的幻灯片ID
             for sld in section.xpath('.//*[local-name()="sldId"]'):
                 val = sld.get('id')
                 if val:
                     slide_id_to_section[int(val)] = name
                     
-        # 将幻灯片编号与节名称挂钩
         for idx, slide in enumerate(prs.slides, 1):
             slide_sections[idx] = slide_id_to_section.get(slide.slide_id, "")
     except Exception as e:
@@ -144,28 +140,27 @@ def get_slide_sections(prs):
 def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=None):
     raw_filename = os.path.splitext(os.path.basename(ppt_path))[0]
     safe_filename = clean_filename(raw_filename)
+    
+    # 完美兼容网页端传入的输出路径
     if output_path is None:
         output_path = f"{raw_filename}英语讲义.docx"
     
     prs = Presentation(ppt_path)
     doc = Document(doc_template)
     
-    # 获取每一页幻灯片所属的“节(Section)”名称
     slide_sections = get_slide_sections(prs)
     
     last_active_name = None
     content_started = False 
 
     # --------------------------------------------------
-    # 【第一阶段】（Pass 1）：预建去重池与提纯词汇解析
+    # 【第一阶段】
     # --------------------------------------------------
     knowledge_paragraphs_pool = set()
     
-    # 1.1 先遣队 1：扫荡“知识精讲”，构建全局去重记忆库
     for slide_number, slide in enumerate(prs.slides, 1):
         sec_name = slide_sections.get(slide_number, "")
         layout_name = slide.slide_layout.name.strip()
-        # 【双擎驱动】：优先使用幻灯片节名称，如果没有或不匹配，则降级使用版式名称
         active_name = sec_name if sec_name in ENGLISH_ICON_MAP else layout_name
         
         if active_name == "知识精讲":
@@ -197,7 +192,6 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
                     if text_content:
                         knowledge_paragraphs_pool.add(normalize_for_dedup(text_content))
 
-    # 1.2 先遣队 2：在“词汇精讲”中严格执行“先过滤，再提取”
     vocab_database = []
     for slide_number, slide in enumerate(prs.slides, 1):
         sec_name = slide_sections.get(slide_number, "")
@@ -252,14 +246,12 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
                     })
                 v_idx += 1
 
-    total_slides = len(prs.slides)
-    print(f"\n🚀 英语讲义引擎启动: [{raw_filename}] (共 {total_slides} 页)")
+    print(f"\n🚀 英语讲义引擎启动: [{raw_filename}] (共 {len(prs.slides)} 页)")
 
     # --------------------------------------------------
-    # 【第二阶段】（Pass 2）：标准版面渲染与排版组装
+    # 【第二阶段】
     # --------------------------------------------------
     for slide_number, slide in enumerate(prs.slides, 1):
-        # 实时判定当前页面的主导名称（幻灯片节优先，版式名称托底）
         sec_name = slide_sections.get(slide_number, "")
         layout_name = slide.slide_layout.name.strip()
         active_name = sec_name if sec_name in ENGLISH_ICON_MAP else layout_name
@@ -289,7 +281,6 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
         all_elements = flatten_shapes(slide.shapes)
         all_elements.sort(key=lambda s: getattr(s, 'top', 0) or 0)
         
-        # --- 知识目标板块 ---
         if active_name == "知识目标":
             line_counter = 1
             for shape in all_elements:
@@ -320,7 +311,6 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
                         
                         line_counter += 1
             
-            # --- 课前预习空降逻辑 ---
             if vocab_database:
                 add_compact_paragraph(doc, "##INSERT_IMAGE:课前预习.emf##", 'h1')
                 
@@ -355,7 +345,6 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
             last_active_name = active_name
             continue
 
-        # --- 知识精讲板块 ---
         if active_name == "知识精讲":
             has_28pt = False
             text_28pt_contents = []
@@ -465,7 +454,6 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
             last_active_name = active_name
             continue
 
-        # --- 词汇精讲板块 ---
         if active_name == "词汇精讲":
             slide_lines = []
             for shape in all_elements:
@@ -528,6 +516,7 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
             last_active_name = active_name
             continue
 
+    # 4. 最后一步保存：完美承接网页端传来的路径
     doc.save(output_path)
     print(f"✅ 英语讲义处理完成: {output_path}\n")
 
