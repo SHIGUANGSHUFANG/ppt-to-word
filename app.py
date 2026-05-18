@@ -3,7 +3,7 @@ import os
 import tempfile
 from EN import process_single_english_ppt
 from wl import process_single_physics_ppt  # 确保文件名和函数名对应
-from Geo import process_single_geo_ppt     # 确保文件名和函数名对应
+from geo import process_single_geo_ppt     # 确保文件名和函数名对应
 
 # --- 页面配置 ---
 st.set_page_config(page_title="全学科自动化讲义中心", page_icon="📝", layout="centered")
