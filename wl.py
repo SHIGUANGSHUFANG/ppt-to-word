@@ -17,16 +17,41 @@ def is_option_text(text):
         return True
     return False
 
-def add_paragraph_with_style(doc, text, style_name):
+# ==========================================
+# 【升级】：支持标题前置埋点与顶格放置的样式函数
+# ==========================================
+def add_paragraph_with_style(doc, text, style_name, is_title=False):
     text = text.strip()
-    if not text: return
+    if not text: return None
+    
+    if is_title:
+        # 【新规2】：在标题同行左侧，紧挨着标题留下标记
+        text = f"##INSERT_IMAGE:标题块.emf##{text}"
+        
+        # 【新规1】：如果文档第一个段落是空的，直接征用它，确保顶在第一行
+        if len(doc.paragraphs) > 0 and not doc.paragraphs[0].text.strip():
+            p = doc.paragraphs[0]
+            p.text = text
+            if style_name:
+                try: p.style = style_name
+                except: pass
+            return p
+        else:
+            # 如果不为空，创建一个新段落并强行插到文档的最顶端（第0位）
+            p = doc.add_paragraph(text)
+            if style_name:
+                try: p.style = style_name
+                except: pass
+            doc._element.body.insert(0, p._element)
+            return p
+            
     if style_name:
         try:
-            doc.add_paragraph(text, style=style_name)
+            return doc.add_paragraph(text, style=style_name)
         except KeyError:
-            doc.add_paragraph(text)
+            return doc.add_paragraph(text)
     else:
-        doc.add_paragraph(text)
+        return doc.add_paragraph(text)
 
 def set_table_borders(table):
     tbl = table._element
@@ -53,14 +78,13 @@ def set_table_borders(table):
         b.set(qn('w:color'), 'auto')
         tblBorders.append(b)
 
-# 【核心重构】：把 main() 改成了带 4 个参数的标准接口
+# 主调度接口，保持 4 参数完美兼容 Streamlit 网页端
 def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=None):
     csv_path = '模板-样式对应关系.csv'
 
     if not os.path.exists(icon_dir):
         os.makedirs(icon_dir)
 
-    # 兼容网页端传来的路径
     if output_path is None:
         raw_filename = os.path.splitext(os.path.basename(ppt_path))[0]
         output_path = f"{raw_filename}物理讲义.docx"
@@ -72,7 +96,7 @@ def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=Non
             for row in reader:
                 config[row['幻灯片版式'].strip()] = row
     except Exception as e:
-        raise Exception(f"❌ 读取 CSV 失败，请确认 Github 仓库中包含 {csv_path} 文件！报错信息: {e}")
+        raise Exception(f"❌ 读取 CSV 失败，请确认 Github 仓库中包含 {csv_path} 文件！具体错误: {e}")
 
     prs = Presentation(ppt_path)
     doc = Document(doc_template)
@@ -89,14 +113,16 @@ def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=Non
         print(f"正在处理第 {slide_number} 页：{layout_name}")
 
         if layout_name != last_layout_name:
-            icon_file = cfg.get('插入矢量图名称', '').strip()
-            if icon_file and icon_file != '不插入':
-                p = doc.add_paragraph()
-                pic_style = cfg.get('图片部分word样式名称')
-                if pic_style:
-                    try: p.style = pic_style
-                    except: pass
-                p.add_run(f"##INSERT_IMAGE:{icon_file}##")
+            # 【细节优化】：如果是大标题页，跳过自动图标逻辑，因为标记要和标题合体
+            if layout_name != "标题":
+                icon_file = cfg.get('插入矢量图名称', '').strip()
+                if icon_file and icon_file != '不插入':
+                    p = doc.add_paragraph()
+                    pic_style = cfg.get('图片部分word样式名称')
+                    if pic_style:
+                        try: p.style = pic_style
+                        except: pass
+                    p.add_run(f"##INSERT_IMAGE:{icon_file}##")
 
         extract_rule = cfg.get('提取内容', '')
         shapes = [s for s in slide.shapes if hasattr(s, 'top') and s.top is not None]
@@ -105,6 +131,7 @@ def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=Non
         for shape in shapes:
             is_title_shape = (shape == slide.shapes.title)
             
+            # --- 表格处理 ---
             if getattr(shape, 'has_table', False):
                 if '全部文本' in extract_rule or '仅文本' in extract_rule:
                     ppt_table = shape.table
@@ -135,19 +162,26 @@ def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=Non
                                 if cleaned_lines:
                                     p.add_run('\n'.join(cleaned_lines))
 
+            # --- 文本框处理 ---
             elif shape.has_text_frame:
                 if '全部文本' in extract_rule or '仅文本' in extract_rule or (is_title_shape and '标题' in extract_rule):
                     raw_lines = shape.text.split('\n')
                     cleaned_lines = [line.replace('\xa0', ' ').strip() for line in raw_lines if line.strip()]
                     if cleaned_lines:
                         text_content = '\n'.join(cleaned_lines)
-                        target_style = ""
-                        if is_title_shape: target_style = cfg.get('标题部分word样式名称')
-                        elif is_option_text(text_content): target_style = cfg.get('试题选项部分word样式名称')
-                        elif "例题" in layout_name or "练习" in layout_name: target_style = cfg.get('试题题干部分word样式名称')
-                        else: target_style = cfg.get('非标题部分word样式名称')
-                        add_paragraph_with_style(doc, text_content, target_style)
+                        
+                        if is_title_shape: 
+                            # 触发标题定制通道
+                            target_style = cfg.get('标题部分word样式名称')
+                            add_paragraph_with_style(doc, text_content, target_style, is_title=True)
+                        else:
+                            target_style = ""
+                            if is_option_text(text_content): target_style = cfg.get('试题选项部分word样式名称')
+                            elif "例题" in layout_name or "练习" in layout_name: target_style = cfg.get('试题题干部分word样式名称')
+                            else: target_style = cfg.get('非标题部分word样式名称')
+                            add_paragraph_with_style(doc, text_content, target_style, is_title=False)
 
+            # --- 图片处理 ---
             elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE and '图片' in extract_rule:
                 try:
                     image = shape.image
@@ -172,6 +206,7 @@ def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=Non
                         r.add_picture(io.BytesIO(image_bytes), width=Emu(sw), height=Emu(sh))
                 except Exception as e: print(f"   ⚠️ 提取插图失败: {e}")
 
+        # --- 备注处理 ---
         if slide.has_notes_slide:
             notes_slide = slide.notes_slide
             if notes_slide.notes_text_frame is not None:
@@ -186,9 +221,33 @@ def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=Non
                         if not notes_style:
                             notes_style = cfg.get('非标题部分word样式名称')
                         
-                        add_paragraph_with_style(doc, final_notes, notes_style)
+                        add_paragraph_with_style(doc, final_notes, notes_style, is_title=False)
 
         last_layout_name = layout_name
+
+    # ==========================================
+    # 【核心注入】：全局排版提纯与抗体拦截引擎
+    # ==========================================
+    # 规整1：彻底清除文档开头的幽灵空行，强迫标题行顶格在第 1 行
+    while len(doc.paragraphs) > 0 and not doc.paragraphs[0].text.strip() and len(doc.paragraphs[0].runs) == 0:
+        p_first = doc.paragraphs[0]._element
+        p_first.getparent().remove(p_first)
+
+    # 规整2：全图检索，强制不允许出现超过两行的连续空行
+    consecutive_empty = 0
+    p_to_remove = []
+    for p in doc.paragraphs:
+        if not p.text.strip() and len(p.runs) == 0:
+            consecutive_empty += 1
+            if consecutive_empty > 2:  # 连续空行数上限为2
+                p_to_remove.append(p)
+        else:
+            consecutive_empty = 0
+            
+    for p in p_to_remove:
+        pPr = p._element
+        pPr.getparent().remove(pPr)
+    # ==========================================
 
     doc.save(output_path)
     print(f"\n✅ 物理讲义处理完成！已生成文件：{output_path}")
