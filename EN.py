@@ -131,7 +131,7 @@ def get_slide_sections(prs):
         for idx, slide in enumerate(prs.slides, 1):
             slide_sections[idx] = slide_id_to_section.get(slide.slide_id, "")
     except Exception as e:
-        print(f"⚠️ 解析幻灯片节时出现异常: {e}")
+        print(f"[WARN] 解析幻灯片节时出现异常: {e}")
     return slide_sections
 
 # ==========================================
@@ -246,7 +246,7 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
                     })
                 v_idx += 1
 
-    print(f"\n🚀 英语讲义引擎启动: [{raw_filename}] (共 {len(prs.slides)} 页)")
+    print(f"\n[INFO] 英语讲义引擎启动: [{raw_filename}] (共 {len(prs.slides)} 页)")
 
     # --------------------------------------------------
     # 【第二阶段】
@@ -518,7 +518,7 @@ def process_single_english_ppt(ppt_path, doc_template, icon_dir, output_path=Non
 
     # 4. 最后一步保存：完美承接网页端传来的路径
     doc.save(output_path)
-    print(f"✅ 英语讲义处理完成: {output_path}\n")
+    print(f"[OK] 英语讲义处理完成: {output_path}\n")
 
 if __name__ == '__main__':
     if not os.path.exists(ICON_DIR): os.makedirs(ICON_DIR)
