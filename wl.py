@@ -60,7 +60,7 @@ def set_table_borders(table):
 # 网页版标准接口：4 参数核心调度
 # ==========================================
 def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=None):
-    csv_path = '模板-样式对应关系.csv'
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(doc_template)), '模板-样式对应关系.csv')
 
     if not os.path.exists(icon_dir):
         os.makedirs(icon_dir)
@@ -201,7 +201,7 @@ def process_single_physics_ppt(ppt_path, doc_template, icon_dir, output_path=Non
                     else:
                         r = p.add_run()
                         r.add_picture(io.BytesIO(image_bytes), width=Emu(sw), height=Emu(sh))
-                except Exception as e: print(f"   ⚠️ 提取插图失败: {e}")
+                except Exception as e: print(f"   [WARN] 提取插图失败: {e}")
 
         # --- 备注处理 ---
         if slide.has_notes_slide:
