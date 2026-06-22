@@ -194,7 +194,7 @@ def process_single_geo_ppt(ppt_path, doc_template, icon_dir, output_path=None):
     total_slides = len(prs.slides)
     content_started = False 
 
-    print(f"\n🚀 正在处理: [{raw_filename}] (共 {total_slides} 页)")
+    print(f"\n[INFO] 正在处理: [{raw_filename}] (共 {total_slides} 页)")
 
     for slide_number, slide in enumerate(prs.slides, 1):
         if slide_number == total_slides: continue
@@ -353,7 +353,7 @@ def process_single_geo_ppt(ppt_path, doc_template, icon_dir, output_path=None):
         last_layout_name = real_section_name
 
     doc.save(output_path)
-    print(f"✅ 地理讲义处理完成: {output_path}\n")
+    print(f"[OK] 地理讲义处理完成: {output_path}\n")
 
 if __name__ == '__main__':
     if not os.path.exists(ICON_DIR): os.makedirs(ICON_DIR)
